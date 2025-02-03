@@ -1,0 +1,64 @@
+import geopandas as gpd
+import rasterio
+from rasterio.features import rasterize
+from rasterio.mask import mask
+from shapely.geometry import box
+import numpy as np
+import os
+
+def create_mask_for_landsat(landsat_path, shapefile_path, output_mask_path):
+    # Step 1: Load the Landsat scene (one band is enough for reference)
+    with rasterio.open(landsat_path) as src:
+        raster_crs = src.crs  # Get the CRS of the Landsat raster
+        raster_bounds = src.bounds  # Get the bounds of the raster
+        raster_transform = src.transform  # Get the transform (affine)
+        raster_shape = (src.height, src.width)  # Get the raster dimensions
+    
+    # Step 2: Load the global mangrove shapefile
+    mangrove_gdf = gpd.read_file(shapefile_path)
+
+    # Step 3: Reproject the shapefile to match the raster CRS
+    if mangrove_gdf.crs != raster_crs:
+        mangrove_gdf = mangrove_gdf.to_crs(raster_crs)
+
+    # Step 4: Clip the shapefile to the raster extent
+    raster_bbox = box(*raster_bounds)  # Create a bounding box from raster bounds
+    mangrove_clipped = mangrove_gdf[mangrove_gdf.intersects(raster_bbox)]  # Clip to raster bounds
+
+    # Step 5: Rasterize the shapefile to create a binary mask
+    # Convert the geometry to a list
+    mangrove_shapes = [(geom, 1) for geom in mangrove_clipped.geometry]
+    mask = rasterize(
+        shapes=mangrove_shapes,
+        out_shape=raster_shape,
+        transform=raster_transform,
+        fill=0,  # Non-mangrove pixels
+        dtype=np.uint8  # Output type
+    )
+
+    # Step 6: Save the binary mask as a GeoTIFF
+    with rasterio.open(
+        output_mask_path,
+        'w',
+        driver='GTiff',
+        height=raster_shape[0],
+        width=raster_shape[1],
+        count=1,
+        dtype=np.uint8,
+        crs=raster_crs,
+        transform=raster_transform
+    ) as dst:
+        dst.write(mask, 1)
+
+    print(f"Mask saved to {output_mask_path}")
+
+if __name__ == "__main__":
+    # Example Usage
+    # landsat_scene_path = "./imagery/LT05_L2SP_008046_20100122_20200825_02_T1_SR_B4.TIF"  # Replace with your Landsat band path
+    # mangrove_shapefile_path = "./GMW/gmw_v3_2010_vec.shp"  # Replace with your shapefile path
+    # output_mask_path = "./Mask/LT05_L2SP_008046_20100122_20200825_02_T1_SR_mask.TIF"  # Replace with desired output path
+
+    landsat_scene_path = "./imagery/LT05_L2SP_009046_20070918_20200829_02_T1_SR_B1.TIF"  # Replace with your Landsat band path
+    mangrove_shapefile_path = "./GMW/gmw_v3_2010_vec.shp"  # Replace with your shapefile path
+    output_mask_path = "./Mask/LT05_L2SP_009046_20070918_20200829_02_T1_SR_mask.TIF"  # R
+    create_mask_for_landsat(landsat_scene_path, mangrove_shapefile_path, output_mask_path)

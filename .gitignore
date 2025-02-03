@@ -1,0 +1,9 @@
+/GMW
+/LT05_L2SP_008046_20100122_20200825_02_T1_SR_mask_allighed.TIF
+/Mask
+/imagery
+/imagery_merge
+/imagery_subsets
+/mask_subsets
+/test_model.py
+/unet_resnet34.pth

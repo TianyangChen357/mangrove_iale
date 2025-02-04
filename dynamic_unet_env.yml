@@ -1,4 +1,4 @@
-name: unet
+name: mangrove
 channels:
   - defaults
   - pytorch
@@ -12,10 +12,11 @@ dependencies:
   - rasterio
   - geopandas
   - pip
+  - tensorboard
   - pip:
     - segmentation-models-pytorch
     - albumentations
-    - numpy
+    - numpy==1.26
     - pandas
     - matplotlib
     - opencv-python

@@ -9,11 +9,14 @@ import numpy as np
 import rasterio
 import time
 import tqdm
+from torch.utils.tensorboard import SummaryWriter
+
 
 def load_tif_dataset_and_masks(tif_dir, mask_dir, scene_names):
     """
-    Loads TIFF images and corresponding masks into NumPy arrays.
-
+    Loads TIFF images and corresponding masks into NumPy arrays, 
+    excluding images where the entire mask is non-mangrove (all zeros).
+    
     Parameters:
         tif_dir (str): Directory containing the TIFF files (training images).
         mask_dir (str): Directory containing the mask files.
@@ -24,33 +27,37 @@ def load_tif_dataset_and_masks(tif_dir, mask_dir, scene_names):
     """
     image_list = []
     mask_list = []
+    removed_count = 0
 
     for scene in scene_names:
         for filename in os.listdir(tif_dir):
             if filename.startswith(scene) and filename.endswith(".tif"):
                 image_path = os.path.join(tif_dir, filename)
-                mask_path = os.path.join(mask_dir, filename)  # Masks have the same naming structure
+                mask_path = os.path.join(mask_dir, filename)
 
                 with rasterio.open(image_path) as src:
                     img = src.read()  # Shape: (6, 256, 256)
 
                 with rasterio.open(mask_path) as src:
-                    mask = src.read(1)  # Read first band of the mask (Shape: 256, 256)
+                    mask = src.read(1)  # Shape: (256, 256), single channel
 
-                if img.shape == (6, 256, 256) and mask.shape == (256, 256):
+                # Check if mask has any mangrove pixels (value 1)
+                if np.any(mask > 0):  
                     image_list.append(img)
                     mask_list.append(mask[np.newaxis, :, :])  # Add channel dimension
                 else:
-                    print(f"Skipping {filename} due to unexpected shape Image: {img.shape}, Mask: {mask.shape}")
+                    removed_count += 1  # Count removed subsets
 
     if image_list and mask_list:
         images = np.stack(image_list, axis=0).astype(np.float32)  # (num_samples, 6, 256, 256)
         masks = np.stack(mask_list, axis=0).astype(np.float32)  # (num_samples, 1, 256, 256)
         print(f"Loaded dataset - Images: {images.shape}, Masks: {masks.shape}")
+        print(f"Removed {removed_count} subsets with no mangrove pixels.")
         return images, masks
     else:
         print("No valid images or masks found.")
         return None, None
+
 
 class SegmentationDataset(Dataset):
     def __init__(self, images, masks):
@@ -144,20 +151,19 @@ def validate_one_epoch(model, dataloader, criterion, device):
     epoch_loss = running_loss / len(dataloader.dataset)
     avg_iou = np.mean(iou_scores)
 
-    print("\nConfusion Matrix:")
+    # print("\nConfusion Matrix:")
     print(all_conf_matrix)
     print(f"IoU for Mangrove Class: {avg_iou:.4f}\n")
 
     return epoch_loss, avg_iou
 
 def main():
-    start=time.time()
+    start = time.time()
     tif_dir = "./imagery_subsets"  # Update with actual path
     mask_dir = "./mask_subsets"  # Update with actual path
 
     train_scenes = [
         "LT05_L2SP_008046_20100122_20200825_02_T1_SR",
-
     ]
     
     val_scenes = [
@@ -177,9 +183,9 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False)
 
-    loadtime=time.time()-start
-    print(f'loading time is {loadtime:.2f} seconds')
-    start=time.time()
+    loadtime = time.time() - start
+    print(f'Loading time: {loadtime:.2f} seconds')
+    start = time.time()
 
     model = smp.Unet(
         encoder_name="resnet34",
@@ -194,22 +200,32 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.BCEWithLogitsLoss()
 
-    num_epochs = 200
-    val_max=0
+    num_epochs = 5000
+
+    # Initialize TensorBoard writer
+    writer = SummaryWriter(log_dir="runs/mangrove_segmentation")
+
     for epoch in range(num_epochs):
         train_loss, train_iou = train_one_epoch(model, train_loader, optimizer, criterion, device)
         val_loss, val_iou = validate_one_epoch(model, val_loader, criterion, device)
-        if val_iou>val_max:
-            val_max=val_iou
+
         print(f"Epoch {epoch + 1}/{num_epochs}, "
-            f"Train Loss: {train_loss:.4f}, Train IoU: {train_iou:.4f}, "
-            f"Val Loss: {val_loss:.4f}, Val IoU: {val_iou:.4f}")
-    torch.save(model.state_dict(), "unet_resnet34.pth")
+              f"Train Loss: {train_loss:.4f}, Train IoU: {train_iou:.4f}, "
+              f"Val Loss: {val_loss:.4f}, Val IoU: {val_iou:.4f}")
+
+        # Log metrics to TensorBoard
+        writer.add_scalar("Loss/Train", train_loss, epoch + 1)
+        writer.add_scalar("IoU/Train", train_iou, epoch + 1)
+        writer.add_scalar("Loss/Validation", val_loss, epoch + 1)
+        writer.add_scalar("IoU/Validation", val_iou, epoch + 1)
+
+    torch.save(model.state_dict(), "./model/unet_resnet34.pth")
+    writer.close()  # Close TensorBoard writer
 
     loadtime=time.time()-start
     print(f'training time is {loadtime:.2f} seconds')
     start=time.time()
 
-    print(f'validation iou max is {val_max}')
+
 if __name__ == "__main__":
     main()

@@ -7,3 +7,7 @@
 /mask_subsets
 /test_model.py
 /unet_resnet34.pth
+*.TIF
+*.tif
+*.pth
+*.0

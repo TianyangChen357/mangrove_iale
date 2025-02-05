@@ -13,3 +13,8 @@
 *.0
 *.tar
 *.txt
+*.dbf
+*.shp
+*.shx
+*.prj
+*.lock

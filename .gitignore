@@ -18,3 +18,8 @@
 *.shx
 *.prj
 *.lock
+*.json
+*.xml
+*.cpg
+*.dbf
+*.jpeg

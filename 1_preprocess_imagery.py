@@ -49,7 +49,7 @@ def merge_scene_bands_to_geotiff(scene_name, input_dir, output_dir):
         return None
 
     for band_idx in band_indices:
-        file_name = f"{scene_name}_B{band_idx}.TIF"
+        file_name = f"{scene_name}_SR_B{band_idx}.TIF"
         file_path = os.path.join(scene_path, file_name)
 
         if not os.path.exists(file_path):
@@ -109,7 +109,7 @@ def process_all_scenes_to_geotiff(scene_names, tar_dir, extract_dir, output_dir)
 
 if __name__ == "__main__":
     # Read scene names from file
-    scene_list_file = "scene_list_display_id.txt"
+    scene_list_file = "scene_list_display_id_test4.txt"
     if os.path.exists(scene_list_file):
         with open(scene_list_file, "r") as file:
             scene_names = [line.strip() for line in file if line.strip()]
@@ -117,8 +117,8 @@ if __name__ == "__main__":
         print(f"Error: {scene_list_file} not found.")
         scene_names = []
 
-    tar_directory = "./landsat_downloads"  # TAR file location
-    extract_directory = "./imagery"  # Directory to extract files
-    output_directory = "./imagery_merge"  # Output directory for merged TIFFs
+    tar_directory = "./0_landsat_downloads"  # TAR file location
+    extract_directory = "./1_imagery"  # Directory to extract files
+    output_directory = "./1_imagery_merge"  # Output directory for merged TIFFs
 
     process_all_scenes_to_geotiff(scene_names, tar_directory, extract_directory, output_directory)
